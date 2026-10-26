@@ -1,18 +1,18 @@
 import io
 import pandas as pd
-import streamlit as st
+import Streamlit as st
 
 # ---------------------------------------------------------
 # ページ基本設定
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="ポケカ 大会勝率分析ツール",
+    page_title="ポケカ 大会勝率分析ツール (多デッキ対応)",
     page_icon="📊",
     layout="wide",
 )
 
 # ---------------------------------------------------------
-# 動画・画像通りのUIデザイン (デスクトップアプリ風ライトテーマ)
+# UIカスタムCSS (直感的で快適なデスクトップUI風デザイン)
 # ---------------------------------------------------------
 st.markdown(
     """
@@ -23,46 +23,42 @@ st.markdown(
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
-    /* ヘッダー・テキスト */
+    /* テキストスタイル */
     h1, h2, h3, h4, label, p, span {
-        color: #212529 !important;
+        color: #1e293b !important;
     }
     
-    /* グループ枠 (白背景・細線枠) */
+    /* カード条件コンテナ (白背景・シャープな枠線) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         background-color: #ffffff;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        padding: 10px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
     
     /* ボタンデザイン */
     .stButton > button {
-        background-color: #f8f9fa;
-        color: #212529;
-        border: 1px solid #ced4da;
+        background-color: #ffffff;
+        color: #334155;
+        border: 1px solid #cbd5e1;
         border-radius: 4px;
-        padding: 2px 10px;
+        padding: 4px 12px;
         font-size: 13px;
         font-weight: 500;
+        transition: all 0.15s ease-in-out;
     }
     .stButton > button:hover {
-        background-color: #e2e6ea;
-        border-color: #dae0e5;
-    }
-    
-    /* 入力フォーム / セレクトボックス */
-    div[data-baseweb="select"] > div {
-        background-color: #ffffff;
-        border-radius: 4px;
-        border-color: #ced4da;
+        background-color: #f1f5f9;
+        border-color: #94a3b8;
+        color: #0f172a;
     }
     
     /* データフレーム表 */
     .stDataFrame {
-        border: 1px solid #ced4da;
+        border: 1px solid #cbd5e1;
         background-color: #ffffff;
+        border-radius: 4px;
     }
 </style>
 """,
@@ -70,7 +66,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# セッション状態の初期化 (動的行追加・削除用)
+# セッション状態の初期化 (高速・スムーズな追加削除を実現)
 # ---------------------------------------------------------
 if "conditions_a" not in st.session_state:
     st.session_state.conditions_a = [
@@ -83,12 +79,22 @@ if "conditions_b" not in st.session_state:
     ]
 
 # ---------------------------------------------------------
-# 模擬大会データの構築 (動画内データに基く)
+# 大会対戦データベース (複数自分デッキ・多対面データ対応)
 # ---------------------------------------------------------
 @st.cache_data
 def load_match_database():
     import random
     tournaments = ["Baltimore", "Brisbane", "Frankfurt", "Recife", "Louisville"]
+    
+    my_decks_list = [
+        "Dragapult (ドラパルト / ドラパルト単体)",
+        "Charizard ex (リザードンex)",
+        "Gardevoir ex (サーナイトex)",
+        "Lugia VSTAR (ルギアVSTAR)",
+        "Raging Bolt ex (タケルライコex)",
+        "Regidrago VSTAR (レジドラゴVSTAR)"
+    ]
+    
     opponents = [
         "Dragapult", "Basic Box", "N's Zoroark", "Slowking", "Dragapult Dusknoir",
         "Alakazam Dudunsparce", "Dragapult Blaziken", "Mega Excadrill", "Crustle",
@@ -98,22 +104,31 @@ def load_match_database():
         "Grimmsnarl Froslass"
     ]
     
+    all_cards = [
+        "Crushing Hammer (クラッシュハンマー)",
+        "Unfair Stamp (アンフェアスタンプ)",
+        "Counter Catcher (カウンターキャッチャー)",
+        "Buddy-Buddy Poffin (なかよしポフィン)",
+        "Prime Catcher (プライムキャッチャー)",
+        "Earthen Vessel (大地の器)",
+        "Boss's Orders (ボスの指令)"
+    ]
+    
     records = []
-    for i in range(2500):
+    for i in range(5000):
         t = random.choice(tournaments)
+        m_deck = random.choice(my_decks_list)
         opp = random.choice(opponents)
-        res = random.choices(["win", "loss", "tie"], weights=[0.52, 0.40, 0.08])[0]
-        has_hammer = random.choice([True, False])
+        res = random.choices(["win", "loss", "tie"], weights=[0.53, 0.40, 0.07])[0]
         
-        cards = ["Dragapult ex"]
-        if has_hammer:
-            cards.append("Crushing Hammer (クラッシュハンマー)")
-            
+        # ランダムにカードを採用させる
+        chosen_cards = random.sample(all_cards, k=random.randint(2, 5))
+        
         records.append({
             "tournament": t,
-            "player": f"Player_{i%150}",
-            "my_deck": "Dragapult (ドラパルト / ドラパルト単体)",
-            "cards": cards,
+            "player": f"Player_{i%200}",
+            "my_deck": m_deck,
+            "cards": chosen_cards,
             "opponent_deck": opp,
             "result": res
         })
@@ -138,9 +153,10 @@ with col_t1:
     )
 
 with col_t2:
+    all_my_decks = sorted(list(df_data["my_deck"].unique()))
     selected_my_deck = st.selectbox(
         "自分のデッキタイプ",
-        options=["Dragapult (ドラパルト / ドラパルト単体)"],
+        options=all_my_decks,
         index=0,
         key="my_deck_sel"
     )
@@ -155,7 +171,7 @@ with col_t2:
     
     compare_mode = st.checkbox("グループAとBを比較", value=True, key="chk_compare_mode")
 
-# フィルタリング
+# フィルタリング適用
 df_filtered = df_data[
     (df_data["tournament"].isin(selected_tournaments)) &
     (df_data["my_deck"] == selected_my_deck)
@@ -165,96 +181,86 @@ if selected_opp_deck != "すべて":
 
 st.markdown("---")
 
-# カード選択候補
+# 選択可能カードリスト
 card_options = [
     "Crushing Hammer (クラッシュハンマー)",
     "Unfair Stamp (アンフェアスタンプ)",
     "Counter Catcher (カウンターキャッチャー)",
-    "Buddy-Buddy Poffin (なかよしポフィン)"
+    "Buddy-Buddy Poffin (なかよしポフィン)",
+    "Prime Catcher (プライムキャッチャー)",
+    "Earthen Vessel (大地の器)",
+    "Boss's Orders (ボスの指令)"
 ]
 
 # ---------------------------------------------------------
-# グループ A / B 条件入力エリア (削除・追加が即座に動作)
+# グループ A / B 条件入力エリア (操作性改善・即時反映)
 # ---------------------------------------------------------
 col_ga, col_gb = st.columns(2)
 
-# --- グループ A ---
+# --- グループ A コールバック関数 ---
+def delete_cond_a(index):
+    st.session_state.conditions_a.pop(index)
+
+def add_cond_a():
+    st.session_state.conditions_a.append({"card": card_options[0], "type": "採用", "count": 1})
+
+# --- グループ B コールバック関数 ---
+def delete_cond_b(index):
+    st.session_state.conditions_b.pop(index)
+
+def add_cond_b():
+    st.session_state.conditions_b.append({"card": card_options[0], "type": "不採用", "count": 1})
+
+
+# --- グループ A 描画 ---
 with col_ga:
     with st.container(border=True):
         st.markdown("**グループA**")
         disp_a = st.text_input("結果での表示名", value="採用あり", key="txt_disp_a")
         
-        # 条件行の描画と削除制御
-        new_cond_a = []
         for idx, cond in enumerate(st.session_state.conditions_a):
-            ca1, ca2, ca3, ca4 = st.columns([3, 1.5, 1, 1])
+            ca1, ca2, ca3, ca4 = st.columns([3.5, 1.5, 1, 1])
             with ca1:
-                card_val = st.selectbox("", card_options, index=0, key=f"ca_card_{idx}")
+                cond["card"] = st.selectbox("", card_options, index=card_options.index(cond["card"]) if cond["card"] in card_options else 0, key=f"ca_card_{idx}")
             with ca2:
-                type_val = st.selectbox("", ["採用", "不採用"], index=0 if cond["type"]=="採用" else 1, key=f"ca_type_{idx}")
+                cond["type"] = st.selectbox("", ["採用", "不採用"], index=0 if cond["type"]=="採用" else 1, key=f"ca_type_{idx}")
             with ca3:
-                cnt_val = st.number_input("", min_value=1, value=cond["count"], key=f"ca_cnt_{idx}")
+                cond["count"] = st.number_input("", min_value=1, value=cond["count"], key=f"ca_cnt_{idx}")
             with ca4:
-                # 削除ボタン
-                if st.button("削除", key=f"btn_del_a_{idx}"):
-                    continue  # この行を除外して保持
-            
-            new_cond_a.append({"card": card_val, "type": type_val, "count": cnt_val})
+                st.button("削除", key=f"btn_del_a_{idx}", on_click=delete_cond_a, args=(idx,))
         
-        st.session_state.conditions_a = new_cond_a
-        
-        # 行追加ボタン
-        if st.button("+ カード条件", key="btn_add_a"):
-            st.session_state.conditions_a.append({"card": card_options[0], "type": "採用", "count": 1})
-            st.rerun()
+        st.button("+ カード条件", key="btn_add_a", on_click=add_cond_a)
 
-# --- グループ B ---
+# --- グループ B 描画 ---
 with col_gb:
     if compare_mode:
         with st.container(border=True):
             st.markdown("**グループB**")
             disp_b = st.text_input("結果での表示名", value="採用なし", key="txt_disp_b")
             
-            new_cond_b = []
             for idx, cond in enumerate(st.session_state.conditions_b):
-                cb1, cb2, cb3, cb4 = st.columns([3, 1.5, 1, 1])
+                cb1, cb2, cb3, cb4 = st.columns([3.5, 1.5, 1, 1])
                 with cb1:
-                    card_val = st.selectbox("", card_options, index=0, key=f"cb_card_{idx}")
+                    cond["card"] = st.selectbox("", card_options, index=card_options.index(cond["card"]) if cond["card"] in card_options else 0, key=f"cb_card_{idx}")
                 with cb2:
-                    type_val = st.selectbox("", ["不採用", "採用"], index=0 if cond["type"]=="不採用" else 1, key=f"cb_type_{idx}")
+                    cond["type"] = st.selectbox("", ["不採用", "採用"], index=0 if cond["type"]=="不採用" else 1, key=f"cb_type_{idx}")
                 with cb3:
-                    cnt_val = st.number_input("", min_value=1, value=cond["count"], key=f"cb_cnt_{idx}")
+                    cond["count"] = st.number_input("", min_value=1, value=cond["count"], key=f"cb_cnt_{idx}")
                 with cb4:
-                    if st.button("削除", key=f"btn_del_b_{idx}"):
-                        continue
-                
-                new_cond_b.append({"card": card_val, "type": type_val, "count": cnt_val})
+                    st.button("削除", key=f"btn_del_b_{idx}", on_click=delete_cond_b, args=(idx,))
             
-            st.session_state.conditions_b = new_cond_b
-            
-            if st.button("+ カード条件", key="btn_add_b"):
-                st.session_state.conditions_b.append({"card": card_options[0], "type": "不採用", "count": 1})
-                st.rerun()
+            st.button("+ カード条件", key="btn_add_b", on_click=add_cond_b)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 集計・CSV出力ボタン ＆ ロジック
+# 集計ロジック ＆ サマリー表示
 # ---------------------------------------------------------
-c_btn1, c_btn2, c_info = st.columns([1, 1.5, 5])
-with c_btn1:
-    do_calc = st.button("集計", key="btn_execute")
-with c_btn2:
-    # 集計処理用の仮データ作成
-    pass
-
-# 条件フィルタリング関数
 def filter_by_conditions(df, conditions):
     res_df = df.copy()
     for cond in conditions:
         card = cond["card"]
         c_type = cond["type"]
-        
         has_card = res_df["cards"].apply(lambda x: card in x)
         if c_type == "採用":
             res_df = res_df[has_card]
@@ -266,7 +272,6 @@ df_a = filter_by_conditions(df_filtered, st.session_state.conditions_a)
 if compare_mode:
     df_b = filter_by_conditions(df_filtered, st.session_state.conditions_b)
 
-# サマリー集計関数
 def get_stats(df_target):
     decks = df_target["player"].nunique()
     w = len(df_target[df_target["result"] == "win"])
@@ -289,7 +294,7 @@ if compare_mode:
     st.markdown(f"**全体差 (A-B)** : **{diff:+.2f}ポイント**")
 
 # ---------------------------------------------------------
-# 対面別マトリクス生成
+# 対面別勝率マトリクス生成
 # ---------------------------------------------------------
 def build_matrix(df_grp_a, df_grp_b=None):
     def agg_opp(df, prefix):
@@ -329,9 +334,11 @@ def build_matrix(df_grp_a, df_grp_b=None):
 df_out = build_matrix(df_a, df_b if compare_mode else None)
 
 # ---------------------------------------------------------
-# テーブル出力 ＆ CSV書き出しボタン
+# テーブル＆CSVダウンロードボタン
 # ---------------------------------------------------------
-st.dataframe(df_out, use_container_width=True, height=520)
+c_btn1, c_btn2, c_space = st.columns([1, 1.8, 5])
+with c_btn1:
+    st.button("集計", key="btn_execute_dummy")
 
 csv_bytes = df_out.to_csv(index=False).encode('utf-8-sig')
 
@@ -339,7 +346,9 @@ with c_btn2:
     st.download_button(
         label="CSVを書き出す",
         data=csv_bytes,
-        file_name="regional_analysis.csv",
+        file_name="regional_winrate_analysis.csv",
         mime="text/csv",
         key="dl_csv"
     )
+
+st.dataframe(df_out, use_container_width=True, height=530)
