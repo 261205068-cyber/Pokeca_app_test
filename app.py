@@ -1,6 +1,6 @@
 import io
 import pandas as pd
-import Streamlit as st
+import streamlit as st
 
 # ---------------------------------------------------------
 # ページ基本設定
